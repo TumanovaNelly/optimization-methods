@@ -15,6 +15,6 @@ $$
 
 ### Ход работы
 В файле [Handmade.pdf](Handmade.pdf) представлено решение задачи вручную, 
-в файле [Solver.xlsx](Solver.xlsx) – решение задачи в Excel, в файле [Program.py](BaseProgram.py) – решение задачи в Python. 
+в файле [Solver.xlsx](Solver.xlsx) – решение задачи в Excel, в файле [MegaProgram.py](MegaProgram.py) – решение задачи в Python. 
 Ответы, полученные разными способами решения, совпали.
 
