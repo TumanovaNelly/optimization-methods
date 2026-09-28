@@ -67,12 +67,6 @@ class SimplexData:
 
 
 class SimplexProcessor:
-    """
-    Отвечает за:
-    - проверку данных и преобразование строк в float;
-    - вывод задачи в консоль;
-    - (в будущем) реализацию симплекс-метода.
-    """
 
     @staticmethod
     def _to_float(s: str) -> float:
@@ -93,40 +87,43 @@ class SimplexProcessor:
         print("\n\n")
 
     def solve(self, data: SimplexData):
-        """
-        Здесь позже можно реализовать сам симплекс-метод.
-        Сейчас — заглушка.
-        """
+        """Решает задачу симплекс методом"""
         # Целевая
-        z = np.array(data.obj_func_vector).astype(np.float64)
-        if data.optimization_type == "min":
-            z = -z
+        type_sign = 1.0 if data.optimization_type == "max" else -1.0
+        z = np.array(data.obj_func_vector).astype(np.float64) * type_sign
+
+        f = np.array(data.constraints_matrix).astype(np.float64)
+        b = np.array(data.constraints_const_vector).astype(np.float64)
 
         # Индексы базисных векторов
         base_indexes = []
 
         # Приводим матрицу ограничений к канону
-        f = np.array(data.constraints_matrix).astype(np.float64)
         for i in range(data.num_constraints):
+            # Если константа меньше нуля
+            if b[i] < 0:
+                b[i] = -b[i]
+                f[i] = -f[i]
+                if data.signs[i] == ">=": data.signs[i] = "<="
+                elif data.signs[i] == "<=": data.signs[i] = ">="
+
             if data.signs[i] == ">=":
                 new_col = np.zeros(data.num_constraints)
                 new_col[i] = -1
                 f = np.column_stack((f, new_col))
+                z = np.append(z, 0.0)
 
             basis_column = np.zeros(data.num_constraints)
             basis_column[i] = 1
             base_indexes.append(f.shape[1])
             f = np.column_stack((f, basis_column))
+            z = np.append(z, 0.0)
 
-        padding = np.zeros(f.shape[1] - len(z))
-        z = np.append(z, padding)
-
-        f_expanded = np.column_stack((f, data.constraints_const_vector)).astype(np.float64)
+        f_expanded = np.column_stack((f, b))
 
         # текущий максимум z
         z_mx = -np.inf
-
-        while True:
+        for k in range(100000):
             # пересчитываем нижнюю строку
             d = np.array([-(f_expanded[:, i] @ z[base_indexes]) + z[i] for i in range(len(z))])
             z_mx = f_expanded[:, -1] @ z[base_indexes]
@@ -149,6 +146,8 @@ class SimplexProcessor:
             for i in range(len(f_expanded)):
                 if i == row_index: continue
                 f_expanded[i] -= f_expanded[row_index] * f_expanded[i][col_index]
+
+        z_mx *= type_sign
 
         answer = np.zeros_like(z)
         answer[base_indexes] = f_expanded[:, -1]
@@ -406,9 +405,9 @@ class SimplexInputApp:
         for i in range(m):
             row_entries = [make_entry(self.con_frame) for _ in range(n)]
 
-            sign = ttk.Combobox(self.con_frame, values=["<=", ">=", "="],
+            sign = ttk.Combobox(self.con_frame, values=["<=", ">=", "=="],
                                 width=3, state="readonly")
-            if i < len(self.saved_signs) and self.saved_signs[i] in ("<=", ">=", "="):
+            if i < len(self.saved_signs) and self.saved_signs[i] in ("<=", ">=", "=="):
                 sign.set(self.saved_signs[i])
             else:
                 sign.set("<=")
