@@ -29,7 +29,7 @@ class FindMinResult:
 
     def plot_result(self, func: Callable[[float], float], func_label, borders: Tuple[float, float]):
         left, right = sorted(borders)
-        func_xs = np.linspace(left, right, 100)
+        func_xs = np.linspace(left, right, 1000)
         func_ys = list(map(func, func_xs))
         plt.plot(func_xs, func_ys, label=func_label, color="tab:blue", lw=2, zorder=3)
 
@@ -68,7 +68,7 @@ class FindMinProblem:
     def __init__(self, func: Callable[[float], float]):
         self.func = func
 
-    def solve(self, borders: Tuple[float, float], eps: float = 1e-4, L: float = 10) -> FindMinResult:
+    def solve(self, borders: Tuple[float, float], eps: float = 1e-4, L: float = 100) -> FindMinResult:
         left, right = sorted(borders)
         left_point = Point(left, self.func(left))
         right_point = Point(right, self.func(right))
