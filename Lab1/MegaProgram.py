@@ -85,17 +85,17 @@ class SimplexProcessor:
         print("Условия неотрицательности: xⱼ ≥ 0")
         print("\n\n")
 
-    def simplex_maximization(self, f_expanded, z, base_indexes):
-        # текущий максимум z
-        z_mx = 0.0
+    def simplex_minimization(self, f_expanded, z, base_indexes):
+        # текущий минимум z
+        z_mn = 0.0
         for k in range(1000):
             # пересчитываем нижнюю строку
             d = np.array([-(f_expanded[:, i] @ z[base_indexes]) + z[i] for i in range(len(z))])
-            z_mx = f_expanded[:, -1] @ z[base_indexes]
+            z_mn = f_expanded[:, -1] @ z[base_indexes]
 
             # находим разрешающий элемент
-            col_index = np.argmax(d)
-            if d[col_index] <= 0.0: break
+            col_index = np.argmin(d)
+            if d[col_index] >= 0.0: break
             row_index = 0
             cur_min = np.inf
             for i in range(len(f_expanded)):
@@ -112,12 +112,12 @@ class SimplexProcessor:
                 if i == row_index: continue
                 f_expanded[i] -= f_expanded[row_index] * f_expanded[i][col_index]
 
-        return z_mx, f_expanded, base_indexes
+        return z_mn, f_expanded, base_indexes
 
     def solve(self, data: SimplexData):
         """Решает задачу симплекс методом"""
         # Целевая
-        type_sign = 1.0 if data.optimization_type == "max" else -1.0
+        type_sign = 1.0 if data.optimization_type == "min" else -1.0
         z = np.array(data.obj_func_vector).astype(np.float64) * type_sign
 
         f = np.array(data.constraints_matrix).astype(np.float64)
@@ -160,11 +160,8 @@ class SimplexProcessor:
         # функция - сумма искусственных переменных
         if len(arti_indexes) > 0:
             w = np.zeros(f.shape[1])
-            w[arti_indexes] = -1
-            w_mx, f_expanded, base_indexes = self.simplex_maximization(f_expanded, w, base_indexes)
-            print(arti_indexes)
-            print(f_expanded)
-            print(base_indexes)
+            w[arti_indexes] = 1
+            w_mx, f_expanded, base_indexes = self.simplex_minimization(f_expanded, w, base_indexes)
             if w_mx != 0.0:
                 print("ЗАДАЧА НЕ ИМЕЕТ РЕШЕНИЙ")
                 return
@@ -179,7 +176,7 @@ class SimplexProcessor:
             print(f"    x{i + 1} = {answer[i]}")
         print()
 
-        z_mx, f_expanded, base_indexes = self.simplex_maximization(f_expanded, z, base_indexes)
+        z_mx, f_expanded, base_indexes = self.simplex_minimization(f_expanded, z, base_indexes)
         z_mx *= type_sign
 
         print("РЕЗУЛЬТАТ:")
