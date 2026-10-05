@@ -67,7 +67,6 @@ class SimplexData:
 
 
 class SimplexProcessor:
-
     @staticmethod
     def _to_float(s: str) -> float:
         """Преобразует строку в float, поддерживая запятую как разделитель."""
@@ -86,44 +85,10 @@ class SimplexProcessor:
         print("Условия неотрицательности: xⱼ ≥ 0")
         print("\n\n")
 
-    def solve(self, data: SimplexData):
-        """Решает задачу симплекс методом"""
-        # Целевая
-        type_sign = 1.0 if data.optimization_type == "max" else -1.0
-        z = np.array(data.obj_func_vector).astype(np.float64) * type_sign
-
-        f = np.array(data.constraints_matrix).astype(np.float64)
-        b = np.array(data.constraints_const_vector).astype(np.float64)
-
-        # Индексы базисных векторов
-        base_indexes = []
-
-        # Приводим матрицу ограничений к канону
-        for i in range(data.num_constraints):
-            # Если константа меньше нуля
-            if b[i] < 0:
-                b[i] = -b[i]
-                f[i] = -f[i]
-                if data.signs[i] == ">=": data.signs[i] = "<="
-                elif data.signs[i] == "<=": data.signs[i] = ">="
-
-            if data.signs[i] == ">=":
-                new_col = np.zeros(data.num_constraints)
-                new_col[i] = -1
-                f = np.column_stack((f, new_col))
-                z = np.append(z, 0.0)
-
-            basis_column = np.zeros(data.num_constraints)
-            basis_column[i] = 1
-            base_indexes.append(f.shape[1])
-            f = np.column_stack((f, basis_column))
-            z = np.append(z, 0.0)
-
-        f_expanded = np.column_stack((f, b))
-
+    def simplex_maximization(self, f_expanded, z, base_indexes):
         # текущий максимум z
-        z_mx = -np.inf
-        for k in range(100000):
+        z_mx = 0.0
+        for k in range(1000):
             # пересчитываем нижнюю строку
             d = np.array([-(f_expanded[:, i] @ z[base_indexes]) + z[i] for i in range(len(z))])
             z_mx = f_expanded[:, -1] @ z[base_indexes]
@@ -147,12 +112,79 @@ class SimplexProcessor:
                 if i == row_index: continue
                 f_expanded[i] -= f_expanded[row_index] * f_expanded[i][col_index]
 
-        z_mx *= type_sign
+        return z_mx, f_expanded, base_indexes
 
+    def solve(self, data: SimplexData):
+        """Решает задачу симплекс методом"""
+        # Целевая
+        type_sign = 1.0 if data.optimization_type == "max" else -1.0
+        z = np.array(data.obj_func_vector).astype(np.float64) * type_sign
+
+        f = np.array(data.constraints_matrix).astype(np.float64)
+        b = np.array(data.constraints_const_vector).astype(np.float64)
+
+        # Индексы базисных переменных
+        base_indexes = []
+
+        # Индексы искусственных переменных (те, что вводятся для создания базиса, не для приведения неравенств)
+        arti_indexes = []
+
+        # Приводим матрицу ограничений к канону
+        for i in range(data.num_constraints):
+            # Если константа меньше нуля
+            if b[i] < 0:
+                b[i] = -b[i]
+                f[i] = -f[i]
+                if data.signs[i] == ">=": data.signs[i] = "<="
+                elif data.signs[i] == "<=": data.signs[i] = ">="
+
+            if data.signs[i] == ">=":
+                new_col = np.zeros(data.num_constraints)
+                new_col[i] = -1
+                f = np.column_stack((f, new_col))
+                z = np.append(z, 0.0)
+
+            basis_column = np.zeros(data.num_constraints)
+            basis_column[i] = 1
+            base_indexes.append(f.shape[1])
+
+            # определяем, новый базисный вектор чисто искусственный или вводится для приведения неравенства
+            if data.signs[i] != "<=": arti_indexes.append(f.shape[1])
+            else: z = np.append(z, 0.0)
+
+            f = np.column_stack((f, basis_column))
+
+        # к f сейчас добавлены переменные для приведения неравенств и создания искусственного базиса
+        f_expanded = np.column_stack((f, b))
+
+        # функция - сумма искусственных переменных
+        if len(arti_indexes) > 0:
+            w = np.zeros(f.shape[1])
+            w[arti_indexes] = -1
+            w_mx, f_expanded, base_indexes = self.simplex_maximization(f_expanded, w, base_indexes)
+            print(arti_indexes)
+            print(f_expanded)
+            print(base_indexes)
+            if w_mx != 0.0:
+                print("ЗАДАЧА НЕ ИМЕЕТ РЕШЕНИЙ")
+                return
+            # удаляем переменные для создания искусственного базиса
+            f_expanded = np.delete(f_expanded, arti_indexes, axis=1)
+            base_indexes = [ind - sum(1 for deleted_ind in arti_indexes if deleted_ind < ind) for ind in base_indexes]
+
+        print("Начальное допустимое решение: ")
         answer = np.zeros_like(z)
         answer[base_indexes] = f_expanded[:, -1]
+        for i in range(data.num_vars):
+            print(f"    x{i + 1} = {answer[i]}")
+        print()
+
+        z_mx, f_expanded, base_indexes = self.simplex_maximization(f_expanded, z, base_indexes)
+        z_mx *= type_sign
 
         print("РЕЗУЛЬТАТ:")
+        answer = np.zeros_like(z)
+        answer[base_indexes] = f_expanded[:, -1]
         for i in range(data.num_vars):
             print(f"    x{i + 1} = {answer[i]}")
 
