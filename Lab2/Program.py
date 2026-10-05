@@ -1,13 +1,13 @@
 import heapq
 import time
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import List, Tuple
+
 import matplotlib.pyplot as plt
 import numpy as np
 import sympy as sp
 from sympy.parsing.sympy_parser import standard_transformations, implicit_multiplication_application
-
-from dataclasses import dataclass
-from collections.abc import Callable
-from typing import List, Tuple
 
 
 @dataclass
@@ -26,6 +26,7 @@ class FindMinResult:
     broken_line_points: List[Point]
     time: float
     iter_count: int
+    L: float
 
     def plot_result(self, func: Callable[[float], float], func_label, borders: Tuple[float, float]):
         left, right = sorted(borders)
@@ -35,7 +36,7 @@ class FindMinResult:
 
         plt.plot([point.x for point in self.broken_line_points],
                  [point.y for point in self.broken_line_points],
-                 label="Broken line", color="tab:orange", ls=":", lw=2, zorder=2)
+                 label=f"Broken line (L={self.L:.2f})", color="tab:orange", ls=":", lw=2, zorder=2)
 
         plt.scatter(self.min_point.x,
                     self.min_point.y,
@@ -46,10 +47,10 @@ class FindMinResult:
         plt.show()
 
     def __str__(self):
-        return \
-f"""The minimum value y = {self.min_point.y} is achieved at the point x = {self.min_point.x}
+        return f"""The minimum value y = {self.min_point.y} is achieved at the point x = {self.min_point.x}
 △x = {self.error.x}
 △y = {self.error.y}
+L = {self.L}
 Number of iterations: {self.iter_count}
 Execution time: {self.time}"""
 
@@ -68,14 +69,16 @@ class FindMinProblem:
     def __init__(self, func: Callable[[float], float]):
         self.func = func
 
-    def solve(self, borders: Tuple[float, float], eps: float = 1e-4, L: float = 100) -> FindMinResult:
+    def solve(self, borders: Tuple[float, float], eps: float = 1e-4) -> FindMinResult:
         left, right = sorted(borders)
+        L = self.__find_L(left, right)
+
         left_point = Point(left, self.func(left))
         right_point = Point(right, self.func(right))
 
         start_time = time.perf_counter()
 
-        first_corner = self.find_corner((left_point, right_point), L)
+        first_corner = self.__find_corner(left_point, right_point, L)
         corners = [first_corner]
         heapq.heapify(corners)
 
@@ -85,8 +88,8 @@ class FindMinProblem:
             min_corner = heapq.heappop(corners)
             if (cur_min.y - min_corner.center.y) < eps: break
             iterations += 1
-            left_sub_corner = self.find_corner((min_corner.left, min_corner.center_func), L)
-            right_sub_corner = self.find_corner((min_corner.center_func, min_corner.right), L)
+            left_sub_corner = self.__find_corner(min_corner.left, min_corner.center_func, L)
+            right_sub_corner = self.__find_corner(min_corner.center_func, min_corner.right, L)
             cur_min = min(cur_min, left_sub_corner.center_func, right_sub_corner.center_func,
                           key=lambda p: p.y)
             heapq.heappush(corners, left_sub_corner)
@@ -105,10 +108,18 @@ class FindMinProblem:
             error=Point(eps / L, eps),
             broken_line_points=broken_line_points,
             time=end_time - start_time,
-            iter_count=iterations)
+            iter_count=iterations, L=L)
 
-    def find_corner(self, points: Tuple[Point, Point], slope: float) -> Corner:
-        left_point, right_point = sorted(points, key=lambda p: p.x)
+    def __find_L(self, left_border: float, right_border: float, intervals_count: int = 1000,
+                 reliability: float = 2.0) -> float:
+        xs = list(np.linspace(left_border, right_border, intervals_count))
+        ys = list(map(self.func, xs))
+        mx_slope = 1.0
+        for i in range(1, intervals_count):
+            mx_slope = max(mx_slope, abs(ys[i] - ys[i - 1]) / (xs[i] - xs[i - 1]))
+        return mx_slope * reliability
+
+    def __find_corner(self, left_point: Point, right_point: Point, slope: float) -> Corner:
         x = (left_point.x + right_point.x + (left_point.y - right_point.y) / slope) / 2
         y = (slope * (left_point.x - right_point.x) + left_point.y + right_point.y) / 2
         return self.Corner(
