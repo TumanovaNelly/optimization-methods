@@ -10,6 +10,9 @@ import sympy as sp
 from sympy.parsing.sympy_parser import standard_transformations, implicit_multiplication_application
 
 
+RED = "\033[91m"
+BASE_COLOR = "\033[0m"
+
 @dataclass
 class Point:
     x: float
@@ -22,11 +25,13 @@ class Point:
 @dataclass
 class FindMinResult:
     min_point: Point
-    error: Point
     broken_line_points: List[Point]
+    potential_mins: List[Point]
     time: float
     iter_count: int
+    max_iter: int
     L: float
+    eps: float
 
     def plot_result(self, func: Callable[[float], float], func_label, borders: Tuple[float, float]):
         left, right = sorted(borders)
@@ -38,20 +43,24 @@ class FindMinResult:
                  [point.y for point in self.broken_line_points],
                  label=f"Broken line (L={self.L:.2f})", color="tab:orange", ls=":", lw=2, zorder=2)
 
+        plt.scatter([point.x for point in self.potential_mins],
+                    [point.y for point in self.potential_mins],
+                    label=f"Potential minimum points", color="tab:red", s=5, zorder=4)
+
         plt.scatter(self.min_point.x,
                     self.min_point.y,
-                    label=f"Minimum point ({self.min_point.x:.2f}, {self.min_point.y:.2f})", color="tab:red", zorder=4)
+                    label=f"Minimum point ({self.min_point.x:.2f}, {self.min_point.y:.2f})", color="tab:red", zorder=5)
 
         plt.legend()
         plt.grid(True)
         plt.show()
 
     def __str__(self):
-        return f"""The minimum value y = {self.min_point.y} is achieved at the point x = {self.min_point.x}
-△x = {self.error.x}
-△y = {self.error.y}
+        return \
+f"""The minimum value y = {self.min_point.y} is achieved at the point x = {self.min_point.x}
 L = {self.L}
-Number of iterations: {self.iter_count}
+ɛ = {self.eps}
+Number of iterations: {self.iter_count} out of {self.max_iter}
 Execution time: {self.time}"""
 
 
@@ -67,9 +76,19 @@ class FindMinProblem:
             return self.center.y < other.center.y
 
     def __init__(self, func: Callable[[float], float]):
-        self.func = func
+        self.func = self.__add_finite_error_raise(func)
 
-    def solve(self, borders: Tuple[float, float], eps: float = 1e-4) -> FindMinResult:
+    @staticmethod
+    def __add_finite_error_raise(func):
+        def safe(x):
+            y = func(x)
+            if not np.isfinite(y):
+                raise ValueError(f"Function value is not finite (x = {x}, y = {y})")
+            return y
+
+        return safe
+
+    def solve(self, borders: Tuple[float, float], eps: float = 1e-4, max_iter: int = 10000) -> FindMinResult:
         left, right = sorted(borders)
         L = self.__find_L(left, right)
 
@@ -82,12 +101,14 @@ class FindMinProblem:
         corners = [first_corner]
         heapq.heapify(corners)
 
-        cur_min = Point(0, float('inf'))
+        cur_min = min(left_point, first_corner.center_func, right_point,
+                          key=lambda p: p.y)
         iterations = 0
-        while True:
-            min_corner = heapq.heappop(corners)
+        for _ in range(max_iter):
+            min_corner = corners[0]
             if (cur_min.y - min_corner.center.y) < eps: break
             iterations += 1
+            heapq.heappop(corners)
             left_sub_corner = self.__find_corner(min_corner.left, min_corner.center_func, L)
             right_sub_corner = self.__find_corner(min_corner.center_func, min_corner.right, L)
             cur_min = min(cur_min, left_sub_corner.center_func, right_sub_corner.center_func,
@@ -97,18 +118,21 @@ class FindMinProblem:
 
         end_time = time.perf_counter()
 
-        broken_line_points = [Point(left, self.func(left))]
+        broken_line_points = [left_point]
+        potential_mins = []
         for corner in corners:
             broken_line_points.append(corner.center)
             broken_line_points.append(corner.right)
+            potential_mins.append(corner.center_func)
         broken_line_points.sort(key=lambda p: p.x)
 
         return FindMinResult(
             min_point=cur_min,
-            error=Point(eps / L, eps),
             broken_line_points=broken_line_points,
+            potential_mins=potential_mins,
             time=end_time - start_time,
-            iter_count=iterations, L=L)
+            iter_count=iterations, max_iter=max_iter,
+            L=L, eps=eps)
 
     def __find_L(self, left_border: float, right_border: float, intervals_count: int = 1000,
                  reliability: float = 2.0) -> float:
@@ -132,9 +156,22 @@ class FindMinProblem:
 def make_func_from_string(expr: str) -> Callable[[float], float]:
     x = sp.symbols('x')
     transforms = standard_transformations + (implicit_multiplication_application,)
-    expr = sp.parse_expr(expr, local_dict={'x': x}, transformations=transforms, evaluate=True)
+    parsed = sp.parse_expr(expr, local_dict={'x': x}, transformations=transforms, evaluate=True)
 
-    return sp.lambdify(x, expr, 'numpy')
+    if not parsed.has(x):
+        raise ValueError("Expression does not depend on x")
+
+    free = parsed.free_symbols - {x}
+    if free:
+        raise ValueError(f"Unknown symbols in expression: {free}")
+
+    func = sp.lambdify(x, parsed, 'numpy')
+
+    try: func(1.0)
+    except Exception as ex:
+        raise ValueError(f"Expression function is not evaluable: {ex}")
+
+    return func
 
 
 if __name__ == "__main__":
@@ -144,8 +181,8 @@ if __name__ == "__main__":
         if expression == "exit": break
         try:
             function = make_func_from_string(expression)
-        except Exception:
-            print("Error while parsing expression")
+        except ValueError as ex:
+            print(f"{RED}{ex}{BASE_COLOR}")
             print()
             continue
 
@@ -155,16 +192,23 @@ if __name__ == "__main__":
             if borders == "exit": break
             try:
                 borders = tuple(map(float, borders.split(" ")))
-            except Exception:
-                print("Error while parsing borders")
+            except ValueError as ex:
+                print(f"{RED}{ex}{BASE_COLOR}")
+                print()
                 continue
 
             if len(borders) != 2:
-                print("Invalid number of borders")
+                print(f"{RED}Invalid number of borders (2 was expected){BASE_COLOR}")
+                print()
                 continue
 
             problem = FindMinProblem(function)
-            result = problem.solve(borders=(borders[0], borders[1]))
+            try: result = problem.solve(borders=(borders[0], borders[1]))
+            except ValueError as ex:
+                print(f"{RED}{ex}{BASE_COLOR}")
+                print()
+                continue
+
             print(result)
             print()
             result.plot_result(function, f"y={expression}", (borders[0], borders[1]))
