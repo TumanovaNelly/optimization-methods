@@ -28,7 +28,6 @@ class FindMinResult:
     status: bool
     min_point: Point
     broken_line_points: List[Point]
-    potential_mins: List[Point]
     time: float
     iter_count: int
     max_iter: int
@@ -44,10 +43,6 @@ class FindMinResult:
         plt.plot([point.x for point in self.broken_line_points],
                  [point.y for point in self.broken_line_points],
                  label=f"Broken line (L={self.L:.2f})", color="tab:orange", ls=":", lw=2, zorder=2)
-
-        plt.scatter([point.x for point in self.potential_mins],
-                    [point.y for point in self.potential_mins],
-                    label=f"Potential minimum points", color="tab:red", s=5, zorder=4)
 
         plt.scatter(self.min_point.x,
                     self.min_point.y,
@@ -74,7 +69,6 @@ class FindMinProblem:
         left: Point
         right: Point
         center: Point
-        center_func: Point
 
         def __lt__(self, other):
             return self.center.y < other.center.y
@@ -111,38 +105,35 @@ class FindMinProblem:
         corners = [first_corner]
         heapq.heapify(corners)
 
-        cur_min = min(left_point, first_corner.center_func, right_point,
-                          key=lambda p: p.y)
+        cur_min = min(left_point, right_point, key=lambda p: p.y)
         for _ in range(max_iter):
             min_corner = corners[0]
+            center_func_point = Point(min_corner.center.x, self.func(min_corner.center.x))
+            cur_min = min(cur_min, center_func_point, key=lambda p: p.y)
+            iterations += 1
+
             if (cur_min.y - min_corner.center.y) < eps:
                 status = True
                 break
 
-            iterations += 1
             heapq.heappop(corners)
-            left_sub_corner = self.__find_corner(min_corner.left, min_corner.center_func, L)
-            right_sub_corner = self.__find_corner(min_corner.center_func, min_corner.right, L)
-            cur_min = min(cur_min, left_sub_corner.center_func, right_sub_corner.center_func,
-                          key=lambda p: p.y)
+            left_sub_corner = self.__find_corner(min_corner.left, center_func_point, L)
+            right_sub_corner = self.__find_corner(center_func_point, min_corner.right, L)
             heapq.heappush(corners, left_sub_corner)
             heapq.heappush(corners, right_sub_corner)
 
         end_time = time.perf_counter()
 
         broken_line_points = [left_point]
-        potential_mins = []
         for corner in corners:
             broken_line_points.append(corner.center)
             broken_line_points.append(corner.right)
-            potential_mins.append(corner.center_func)
         broken_line_points.sort(key=lambda p: p.x)
 
         return FindMinResult(
             status=status,
             min_point=cur_min,
             broken_line_points=broken_line_points,
-            potential_mins=potential_mins,
             time=end_time - start_time,
             iter_count=iterations, max_iter=max_iter,
             L=L, eps=eps)
@@ -162,8 +153,7 @@ class FindMinProblem:
         return self.Corner(
             left=left_point,
             right=right_point,
-            center=Point(x, y),
-            center_func=Point(x, self.func(x)))
+            center=Point(x, y))
 
 
 def make_func_from_string(expr: str) -> Callable[[float], float]:
@@ -199,10 +189,15 @@ if __name__ == "__main__":
             print()
             continue
 
+        was_exit = False
         while True:
-            print("Enter borders separated by spaces or 'exit':")
+            print("Enter borders separated by spaces, 'back' or 'exit':")
             borders = input().strip()
-            if borders == "exit": break
+            if borders == "back": break
+            if borders == "exit":
+                was_exit = True
+                break
+
             try:
                 borders = tuple(map(float, borders.split(" ")))
             except ValueError as ex:
@@ -225,3 +220,5 @@ if __name__ == "__main__":
             print(result)
             print()
             result.plot_result(function, f"y={expression}", (borders[0], borders[1]))
+
+        if was_exit: break
