@@ -173,42 +173,6 @@ class SimplexProcessor:
                 print("ЗАДАЧА НЕ ИМЕЕТ РЕШЕНИЙ")
                 return
 
-            processed = set()
-            while True:
-                # ищем первую искусственную в базисе, которую ещё не обработали
-                row = None
-                for r, basis_ind in enumerate(base_indexes):
-                    if basis_ind in arti_indexes and basis_ind not in processed:
-                        row = r
-                        break
-                if row is None:
-                    break
-
-                arti_col = base_indexes[row]
-
-                # ищем неискусственный ненулевой элемент в этой строке
-                pivot_col = None
-                for j in range(f_expanded.shape[1] - 1):
-                    if j in arti_indexes:
-                        continue
-                    if abs(f_expanded[row, j]) > 1e-9:
-                        pivot_col = j
-                        break
-
-                if pivot_col is None:
-                    # строка линейно зависима от остальных
-                    f_expanded = np.delete(f_expanded, row, axis=0)
-                    base_indexes.pop(row)
-                else:
-                    # обычный шаг замены базиса
-                    base_indexes[row] = pivot_col
-                    f_expanded[row] /= f_expanded[row, pivot_col]
-                    for i in range(len(f_expanded)):
-                        if i == row:
-                            continue
-                        f_expanded[i] -= f_expanded[row] * f_expanded[i, pivot_col]
-                    processed.add(arti_col)
-
             # удаляем переменные для создания искусственного базиса
             f_expanded = np.delete(f_expanded, arti_indexes, axis=1)
             z = np.delete(z, arti_indexes)
