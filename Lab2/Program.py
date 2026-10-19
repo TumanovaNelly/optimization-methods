@@ -11,6 +11,7 @@ from sympy.parsing.sympy_parser import standard_transformations, implicit_multip
 
 
 RED = "\033[91m"
+GREEN = "\033[92m"
 BASE_COLOR = "\033[0m"
 
 @dataclass
@@ -24,6 +25,7 @@ class Point:
 
 @dataclass
 class FindMinResult:
+    status: bool
     min_point: Point
     broken_line_points: List[Point]
     potential_mins: List[Point]
@@ -56,12 +58,14 @@ class FindMinResult:
         plt.show()
 
     def __str__(self):
+        status_str = f"{GREEN}The stop criterion has been reached{BASE_COLOR}" if self.status else f"{RED}The stop criterion has not been reached{BASE_COLOR}"
         return \
 f"""The minimum value y = {self.min_point.y} is achieved at the point x = {self.min_point.x}
-L = {self.L}
+L = {self.L:.2f}
 ɛ = {self.eps}
+{status_str}
 Number of iterations: {self.iter_count} out of {self.max_iter}
-Execution time: {self.time}"""
+Execution time: {self.time:.2f}"""
 
 
 class FindMinProblem:
@@ -89,6 +93,12 @@ class FindMinProblem:
         return safe
 
     def solve(self, borders: Tuple[float, float], eps: float = 1e-4, max_iter: int = 10000) -> FindMinResult:
+        if eps <= 0: raise ValueError("Eps must be greater than 0")
+        if max_iter <= 0: raise ValueError("Maximum number of iterations must be greater than 0")
+
+        status = False
+        iterations = 0
+
         left, right = sorted(borders)
         L = self.__find_L(left, right)
 
@@ -103,10 +113,12 @@ class FindMinProblem:
 
         cur_min = min(left_point, first_corner.center_func, right_point,
                           key=lambda p: p.y)
-        iterations = 0
         for _ in range(max_iter):
             min_corner = corners[0]
-            if (cur_min.y - min_corner.center.y) < eps: break
+            if (cur_min.y - min_corner.center.y) < eps:
+                status = True
+                break
+
             iterations += 1
             heapq.heappop(corners)
             left_sub_corner = self.__find_corner(min_corner.left, min_corner.center_func, L)
@@ -127,6 +139,7 @@ class FindMinProblem:
         broken_line_points.sort(key=lambda p: p.x)
 
         return FindMinResult(
+            status=status,
             min_point=cur_min,
             broken_line_points=broken_line_points,
             potential_mins=potential_mins,
