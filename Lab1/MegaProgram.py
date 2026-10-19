@@ -173,6 +173,11 @@ class SimplexProcessor:
                 print("ЗАДАЧА НЕ ИМЕЕТ РЕШЕНИЙ")
                 return
 
+            for ind in arti_indexes:
+                if ind in base_indexes:
+                    print("НЕ УДАЛОСЬ ВЫВЕСТИ ИСКУССТВЕННЫЕ ПЕРЕМЕННЫЕ ИЗ БАЗИСА")
+                    return
+
             # удаляем переменные для создания искусственного базиса
             f_expanded = np.delete(f_expanded, arti_indexes, axis=1)
             z = np.delete(z, arti_indexes)
