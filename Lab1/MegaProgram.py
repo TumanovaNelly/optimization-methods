@@ -96,14 +96,19 @@ class SimplexProcessor:
             # находим разрешающий элемент
             col_index = np.argmin(d)
             if d[col_index] >= 0.0: break
-            row_index = 0
+
+            row_index = -1
             cur_min = np.inf
             for i in range(len(f_expanded)):
-                if f_expanded[i][col_index] <= 0.0: continue
+                if f_expanded[i][col_index] <= 0.0:
+                    continue
                 val = f_expanded[i][-1] / f_expanded[i][col_index]
                 if cur_min > val:
                     cur_min = val
                     row_index = i
+
+            if row_index == -1:
+                raise ValueError("ЗАДАЧА НЕОГРАНИЧЕНА (нет разрешающей строки)")
 
             # меняем базис
             base_indexes[row_index] = col_index
@@ -150,9 +155,10 @@ class SimplexProcessor:
 
             # определяем, новый базисный вектор чисто искусственный или вводится для приведения неравенства
             if data.signs[i] != "<=": arti_indexes.append(f.shape[1])
-            else: z = np.append(z, 0.0)
 
             f = np.column_stack((f, basis_column))
+            z = np.append(z, 0.0)
+
 
         # к f сейчас добавлены переменные для приведения неравенств и создания искусственного базиса
         f_expanded = np.column_stack((f, b))
@@ -162,11 +168,50 @@ class SimplexProcessor:
             w = np.zeros(f.shape[1])
             w[arti_indexes] = 1
             w_mx, f_expanded, base_indexes = self.simplex_minimization(f_expanded, w, base_indexes)
+
             if w_mx != 0.0:
                 print("ЗАДАЧА НЕ ИМЕЕТ РЕШЕНИЙ")
                 return
+
+            processed = set()
+            while True:
+                # ищем первую искусственную в базисе, которую ещё не обработали
+                row = None
+                for r, basis_ind in enumerate(base_indexes):
+                    if basis_ind in arti_indexes and basis_ind not in processed:
+                        row = r
+                        break
+                if row is None:
+                    break
+
+                arti_col = base_indexes[row]
+
+                # ищем неискусственный ненулевой элемент в этой строке
+                pivot_col = None
+                for j in range(f_expanded.shape[1] - 1):
+                    if j in arti_indexes:
+                        continue
+                    if abs(f_expanded[row, j]) > 1e-9:
+                        pivot_col = j
+                        break
+
+                if pivot_col is None:
+                    # строка линейно зависима от остальных
+                    f_expanded = np.delete(f_expanded, row, axis=0)
+                    base_indexes.pop(row)
+                else:
+                    # обычный шаг замены базиса
+                    base_indexes[row] = pivot_col
+                    f_expanded[row] /= f_expanded[row, pivot_col]
+                    for i in range(len(f_expanded)):
+                        if i == row:
+                            continue
+                        f_expanded[i] -= f_expanded[row] * f_expanded[i, pivot_col]
+                    processed.add(arti_col)
+
             # удаляем переменные для создания искусственного базиса
             f_expanded = np.delete(f_expanded, arti_indexes, axis=1)
+            z = np.delete(z, arti_indexes)
             base_indexes = [ind - sum(1 for deleted_ind in arti_indexes if deleted_ind < ind) for ind in base_indexes]
 
         print("Начальное допустимое решение: ")
@@ -176,7 +221,12 @@ class SimplexProcessor:
             print(f"    x{i + 1} = {answer[i]}")
         print()
 
-        z_mx, f_expanded, base_indexes = self.simplex_minimization(f_expanded, z, base_indexes)
+        try:
+            z_mx, f_expanded, base_indexes = self.simplex_minimization(f_expanded, z, base_indexes)
+        except ValueError as ex:
+            print(f"{ex}")
+            return
+
         z_mx *= type_sign
 
         print("РЕЗУЛЬТАТ:")
