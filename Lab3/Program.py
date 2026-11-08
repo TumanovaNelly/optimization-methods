@@ -80,6 +80,9 @@ class FindExtrProblem:
                   [limitation.expression for limitation in self.limitations])
 
         solutions = sp.solve(grad_L, all_variables, dict=True, seq=True)
+        if not solutions:
+            assert ValueError("No stationary points found")
+
         candidates = self.__make_candidates(solutions)
 
         return FindExtrOkResult(
@@ -112,11 +115,13 @@ Find the extremes of the function {self.function} under constraints:
         jacobian = sp.Matrix([[sp.diff(lim.expression, var) for var in self.variables] for lim in self.limitations])
 
         for cand in candidates:
-            if cand.func_value == min_func_val: cand.labels.append(label("[GLOBAL MINIMUM]"))
-            if cand.func_value == max_func_val: cand.labels.append(label("[GLOBAL MAXIMUM]"))
+            if sp.N(cand.func_value) == sp.N(min_func_val): cand.labels.append(label("[MINIMUM]"))
+            if sp.N(cand.func_value) == sp.N(max_func_val): cand.labels.append(label("[MAXIMUM]"))
 
             J_val = jacobian.subs(cand.coordinates)
             rank_val = J_val.rank()
+            if len(self.limitations) > len(self.variables):
+                warning("Overdetermined...")
             max_rank = min(len(self.limitations), len(self.variables))
             if rank_val < max_rank:
                 cand.labels.append(
@@ -175,7 +180,7 @@ def read_expression(name: str, variables: List[sp.Symbol]) -> Optional[Function]
     function = None
     while True:
         print(f"Enter {name} or 'exit':")
-        expr_str = input()
+        expr_str = input().replace("^", "**")
         if expr_str == "exit": break
 
         try:
