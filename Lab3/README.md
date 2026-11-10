@@ -9,22 +9,26 @@
 ### формулы
 Для $f: \mathbb{R}^n &rarr; \mathbb{R}^m$, то есть $f(x) = y$, где $x \in \mathbb{R}^n$, $y \in \mathbb{R}^m$ 
 матрица Якоби 
-$J_h = \begin{pmatrix} 
-\dfrac{\partial y_1}{\partial x_1} & \dfrac{\partial y_1}{\partial x_2} & \dots & \dfrac{\partial y_1}{\partial x_n} \\ 
+```math
+J_h = \begin{pmatrix} 
+\dfrac{\partial y_1}{\partial x_1} & \dfrac{\partial y_1}{\partial x_2} & \dots & \dfrac{\partial y_1}{\partial x_n} \\
 \dfrac{\partial y_2}{\partial x_1} & \dfrac{\partial y_2}{\partial x_2} & \dots & \dfrac{\partial y_2}{\partial x_n} \\ 
 \vdots & \vdots & \ddots & \vdots \\
 \dfrac{\partial y_m}{\partial x_1} & \dfrac{\partial y_m}{\partial x_2} & \dots & \dfrac{\partial y_m}{\partial x_n} 
-\end{pmatrix}$
+\end{pmatrix}
+```
 
 Градиент – частный случай матрицы Якоби (транспонированной) – первая строка матрицы Якоби  
 для функции $f: \mathbb{R}^n &rarr; \mathbb{R}$, то есть $f(x) = y$, где $x \in \mathbb{R}^n$, $y \in \mathbb{R}$ 
 градиент
-$\nabla f = \begin{pmatrix} 
+```math
+\nabla f = \begin{pmatrix} 
 \dfrac{\partial y}{\partial x_1} \\ 
 \dfrac{\partial y}{\partial x_2} \\ 
 \dots \\ 
 \dfrac{\partial y}{\partial x_n}  
-\end{pmatrix}$
+\end{pmatrix}
+```
 
 Функция Лагранжа $L(x, \lambda) = f(x) + \sum\limits_{i=1}^m \lambda_i h_i(x)$, 
 где $\lambda \in \mathbb{R}^m$ – множители Лагранжа (неопределенные коэффициенты), 
@@ -143,8 +147,8 @@ $\text{rk}(J_h) < 1 \iff \nabla h(x, y) = (0, 0)^T \iff x = 0 \text{ и } y = 0$
 [► перейти к заданию ◄](#2-ручное-решение)
 
 Функция Лагранжа $L(x, y, \lambda) = f(x, y) + \lambda \cdot h(x, y) = x + y + \lambda (x^2 + 4y^2 - 4)$
-
-$$\begin{cases}
+```math
+\begin{cases}
 \dfrac{\partial L}{\partial x} = 1 + 2\lambda x = 0 \\
 \dfrac{\partial L}{\partial y} = 1 + 8\lambda y = 0 \\
 h = x^2 + 4y^2 - 4 = 0
@@ -154,7 +158,8 @@ h = x^2 + 4y^2 - 4 = 0
 1 + 2\lambda x = 0 \\
 1 + 8\lambda y = 0 \\
 x^2 + 4y^2 = 4 
-\end{cases}$$
+\end{cases}
+```
 
 Из первых двух уравнений выразим переменные через $\lambda$ (заметим, что $\lambda \neq 0$):
 $$x = -\frac{1}{2\lambda}$$
